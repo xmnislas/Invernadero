@@ -67,6 +67,6 @@ public class Medidas {
 
     @Override
     public String toString() {
-        return "Medidas{" + " humedad=" + humedad + ", temperatura=" + temperatura + '}';
+        return "Medidas{" + "humedad=" + humedad + ", temperatura=" + temperatura + '}';
     }
 }

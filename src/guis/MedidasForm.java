@@ -11,11 +11,20 @@ import com.rabbitmq.client.ConnectionFactory;
 import entidades.Medidas;
 import entidades.Sensor;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import javax.crypto.BadPaddingException;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.JOptionPane;
 import persistencia.ISensorDAO;
+import seguridad.Cifrado;
 
 /**
  *
@@ -23,6 +32,7 @@ import persistencia.ISensorDAO;
  */
 public class MedidasForm extends javax.swing.JFrame {
     private final String QUEUE_NAME = "medidas_queue";
+    private final String claveEncriptacion = "secreto";
     private final ISensorDAO sensorDAO;
     /**
      * Creates new form MedidasForm
@@ -57,7 +67,19 @@ public class MedidasForm extends javax.swing.JFrame {
             // Código para enviar entidades
             Medidas medidas = new Medidas(Double.parseDouble(this.txtHumedad.getText()), Double.parseDouble(this.txtTemperatura.getText()));
             ObjectMapper mapper = new ObjectMapper();
-            String message = mapper.writeValueAsString(medidas);
+            Cifrado cifrador = new Cifrado();
+            String encriptado = null;
+            System.out.println(medidas.toString());
+            try {
+                encriptado = cifrador.encriptar(medidas.toString(), claveEncriptacion);
+                System.out.println("Mensaje cifrado: " + encriptado);
+            } catch (NoSuchAlgorithmException e) {
+                e.printStackTrace(); 
+            } catch (UnsupportedEncodingException | InvalidKeyException | NoSuchPaddingException | IllegalBlockSizeException | BadPaddingException ex) {
+                Logger.getLogger(MedidasForm.class.getName()).log(Level.SEVERE, null, ex);
+            }
+
+            String message = mapper.writeValueAsString(encriptado);
             channel.basicPublish("", QUEUE_NAME, null, message.getBytes());
             JOptionPane.showMessageDialog(this, "El sensor envío al gateway las medidas.", "Información", JOptionPane.INFORMATION_MESSAGE);
             this.limpiarFormulario();

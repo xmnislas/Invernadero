@@ -12,21 +12,30 @@ import com.rabbitmq.client.ConnectionFactory;
 import com.rabbitmq.client.DefaultConsumer;
 import com.rabbitmq.client.Envelope;
 import entidades.Medidas;
+import guis.MedidasForm;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.net.Socket;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
 import java.util.concurrent.TimeoutException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.crypto.BadPaddingException;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
 import javax.swing.JTextArea;
+import seguridad.Cifrado;
 
 /**
  *
  * @author Equipo 3
  */
-public class Gateway{
+public class Gateway {
 
     public final String QUEUE_NAME = "medidas_queue";
+    private final String claveEncriptacion = "secreto";
     private Medidas medidas;
     private final JTextArea areatexto;
     public final static int PUERTO_SERVIDOR = 1234;
@@ -35,7 +44,7 @@ public class Gateway{
     public Gateway(JTextArea areatexto) {
         this.areatexto = areatexto;
     }
-    
+
     public void recibirDatos() {
         ConnectionFactory factory = new ConnectionFactory();
         factory.setHost("localhost");
@@ -47,33 +56,43 @@ public class Gateway{
 
             // Código para recibir entidades
             ObjectMapper objectMapper = new ObjectMapper();
+
             channel.basicConsume(QUEUE_NAME, true, new DefaultConsumer(channel) {
                 @Override
                 public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
                     String message = new String(body, "UTF-8");
-                    medidas = objectMapper.readValue(message, Medidas.class);
-                    areatexto.append("El gateway recibió: " + medidas + "\n");
-                    enviarDatos();
+                    Cifrado cifrador = new Cifrado();
+                    String desencriptado = null;
+                    try {
+                        desencriptado = cifrador.desencriptar(message, claveEncriptacion);
+                    } catch (NoSuchAlgorithmException e) {
+                        e.printStackTrace(); 
+                    } catch (UnsupportedEncodingException | InvalidKeyException | NoSuchPaddingException | IllegalBlockSizeException | BadPaddingException ex) {
+                        Logger.getLogger(MedidasForm.class.getName()).log(Level.SEVERE, null, ex);
+                    }
+
+                    //medidas = objectMapper.readValue(desencriptado, Medidas.class);
+                    areatexto.append("El gateway recibió: " + desencriptado + "\n");
+                    enviarDatos(desencriptado);
                 }
             });
-        } catch (IOException | TimeoutException  e) {
+        } catch (IOException | TimeoutException e) {
             e.printStackTrace();
         }
     }
-    
-    public void enviarDatos(){
+
+    public void enviarDatos(String datos) {
         try {
             Socket socket = new Socket(IP_SERVIDOR, PUERTO_SERVIDOR);
-            try (DataOutputStream flujoSalida = new DataOutputStream(socket.getOutputStream())){
-                String temperatura = formatoBinario(medidas.getTemperatura().toString());
-                String humedad = formatoBinario(medidas.getHumedad().toString());
-                flujoSalida.writeUTF("Temperatura: " + temperatura + ", Humedad: " + humedad + "\n");
-            }            
+            try ( DataOutputStream flujoSalida = new DataOutputStream(socket.getOutputStream())) {
+                String datosBinario = formatoBinario(datos);
+                flujoSalida.writeUTF(datosBinario);
+            }
         } catch (IOException ex) {
             Logger.getLogger(Gateway.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
-    
+
     private static void getBits(StringBuilder sb, byte b) {
         for (int i = 0; i < 8; i++) {
             sb.append((b & 128) == 0 ? 0 : 1);
@@ -81,7 +100,7 @@ public class Gateway{
         }
         sb.append(' ');
     }
- 
+
     public static String formatoBinario(String s) {
         byte[] bytes = s.getBytes();
         StringBuilder sb = new StringBuilder();
